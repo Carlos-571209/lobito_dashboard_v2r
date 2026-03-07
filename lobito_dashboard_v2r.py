@@ -90,7 +90,7 @@ project_npv = npf.npv(wacc, fcff)
 project_irr = npf.irr(fcff)
 
 # ---------------------------------------------------------
-# HELPER ENGINE: Dynamic NPV Calculator for Sensitivities
+# HELPER ENGINE: Dynamic NPV & Breakeven Calculators
 # ---------------------------------------------------------
 def get_dynamic_npv(test_capex, test_rev):
     test_capex_sched = np.zeros(n_years)
@@ -121,6 +121,27 @@ def get_dynamic_npv(test_capex, test_rev):
             
     test_fcff = test_ebitda - test_capex_sched - test_taxes
     return npf.npv(wacc, test_fcff)
+
+# Bisection algorithms to automatically find the TRUE $0 NPV crossing
+def find_capex_breakeven(test_rev, target_npv=0):
+    low, high = 100.0, 20000.0
+    for _ in range(40):
+        mid = (low + high) / 2
+        if get_dynamic_npv(mid, test_rev) > target_npv:
+            low = mid
+        else:
+            high = mid
+    return mid
+
+def find_rev_breakeven(test_capex, target_npv=0):
+    low, high = 100.0, 30000.0
+    for _ in range(40):
+        mid = (low + high) / 2
+        if get_dynamic_npv(test_capex, mid) > target_npv:
+            high = mid
+        else:
+            low = mid
+    return mid
 
 # 5. Dashboard Setup & Tabs
 st.title("Lobito Refinery: Master Dashboard")
@@ -175,13 +196,19 @@ with tab2:
     st.write("") 
     st.write("") 
     
-    # 1. Generate Dynamic CAPEX Data (Live Capex stepped up by 0%, 15%, 30%, 45%, 60%)
-    capex_steps = [live_capex * m for m in [1.0, 1.15, 1.30, 1.45, 1.60]]
+    # Calculate EXACT Breakeven points
+    c_break = find_capex_breakeven(live_rev)
+    r_break = find_rev_breakeven(live_capex)
+    
+    # 1. Generate 5 Dynamic CAPEX Data points crossing precisely through the zero mark
+    c_diff = c_break - live_capex
+    capex_steps = [live_capex + c_diff * (i / 3) for i in range(5)]
     capex_npvs = [get_dynamic_npv(c, live_rev) for c in capex_steps]
     df_capex = pd.DataFrame({"CAPEX": capex_steps, "NPV": capex_npvs})
     
-    # 2. Generate Dynamic Revenue Data (Live Rev stepped down tightly by 0%, 0.6%, 1.2%, 1.8%, 2.5%)
-    rev_steps = [live_rev * m for m in [1.0, 0.9936, 0.9872, 0.9809, 0.9745]]
+    # 2. Generate 5 Dynamic Revenue Data points crossing precisely through the zero mark
+    r_diff = r_break - live_rev
+    rev_steps = [live_rev + r_diff * (i / 3) for i in range(5)]
     rev_npvs = [get_dynamic_npv(live_capex, r) for r in rev_steps]
     df_rev = pd.DataFrame({"Revenues": rev_steps, "NPV": rev_npvs})
     
@@ -195,7 +222,12 @@ with tab2:
         # Excel-Style Dynamic Chart
         fig_capex = go.Figure()
         fig_capex.add_trace(go.Scatter(x=df_capex["CAPEX"], y=df_capex["NPV"], mode='lines+markers', name='NPV', marker=dict(symbol='diamond', size=10, color='#4472C4'), line=dict(color='#4472C4', width=3)))
-        fig_capex.update_layout(title=dict(text="<b>CAPEX Sensitivity</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>CAPEX</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
+        
+        # Widening the X-axis by 15% so the zero crossing is highly visible
+        x_min, x_max = min(capex_steps), max(capex_steps)
+        x_pad = (x_max - x_min) * 0.15
+        
+        fig_capex.update_layout(title=dict(text="<b>CAPEX Sensitivity</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>CAPEX</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[x_min - x_pad, x_max + x_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
         fig_capex.add_hline(y=0, line_width=1, line_color="black") # Breakeven Line
         fig_capex.update_xaxes(mirror=True, showline=True, linecolor='gray')
         fig_capex.update_yaxes(mirror=True, showline=True, linecolor='gray')
@@ -209,7 +241,12 @@ with tab2:
         # Excel-Style Dynamic Chart
         fig_rev = go.Figure()
         fig_rev.add_trace(go.Scatter(x=df_rev["Revenues"], y=df_rev["NPV"], mode='lines+markers', name='NPV', marker=dict(symbol='diamond', size=10, color='#4472C4'), line=dict(color='#4472C4', width=3)))
-        fig_rev.update_layout(title=dict(text="<b>Revenues Sensitivities</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>Revenues</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
+        
+        # Widening the X-axis by 15% so the zero crossing is highly visible
+        rx_min, rx_max = min(rev_steps), max(rev_steps)
+        rx_pad = (rx_max - rx_min) * 0.15
+        
+        fig_rev.update_layout(title=dict(text="<b>Revenues Sensitivities</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>Revenues</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[rx_min - rx_pad, rx_max + rx_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
         fig_rev.add_hline(y=0, line_width=1, line_color="black") # Breakeven Line
         fig_rev.update_xaxes(mirror=True, showline=True, linecolor='gray')
         fig_rev.update_yaxes(mirror=True, showline=True, linecolor='gray')
