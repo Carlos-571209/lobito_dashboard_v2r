@@ -121,7 +121,7 @@ def get_dynamic_npv(test_capex, test_rev):
             
     test_fcff = test_ebitda - test_capex_sched - test_taxes
     
-    # Pure, unadjusted calculation to match the true Master Engine
+    # Pure calculation matching the Master Engine
     return npf.npv(wacc, test_fcff)
 
 # Python's equivalent to Excel's Goal Seek to find TRUE $0 NPV
@@ -130,9 +130,9 @@ def find_capex_breakeven(test_rev, target_npv=0):
     for _ in range(50):
         mid = (low + high) / 2
         if get_dynamic_npv(mid, test_rev) > target_npv:
-            low = mid # NPV is still positive, we need to increase CAPEX
+            low = mid 
         else:
-            high = mid # NPV dropped below zero, we overshot
+            high = mid 
     return mid
 
 def find_rev_breakeven(test_capex, target_npv=0):
@@ -140,9 +140,9 @@ def find_rev_breakeven(test_capex, target_npv=0):
     for _ in range(50):
         mid = (low + high) / 2
         if get_dynamic_npv(test_capex, mid) > target_npv:
-            high = mid # NPV is positive, we can afford lower revenues
+            high = mid 
         else:
-            low = mid # NPV dropped below zero, we need higher revenues
+            low = mid 
     return mid
 
 # 5. Dashboard Setup & Tabs
