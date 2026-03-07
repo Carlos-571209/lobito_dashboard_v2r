@@ -3,4 +3,3 @@ numpy
 numpy-financial
 plotly
 pandas
-plotly.graph_objects
