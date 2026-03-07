@@ -90,7 +90,7 @@ project_npv = npf.npv(wacc, fcff)
 project_irr = npf.irr(fcff)
 
 # ---------------------------------------------------------
-# HELPER ENGINE: Dynamic NPV & Breakeven Calculators
+# HELPER ENGINE: Python "Goal Seek" (Bisection Algorithm)
 # ---------------------------------------------------------
 def get_dynamic_npv(test_capex, test_rev):
     test_capex_sched = np.zeros(n_years)
@@ -120,27 +120,29 @@ def get_dynamic_npv(test_capex, test_rev):
             test_taxes[i] = test_ebt[i] * tax_rate
             
     test_fcff = test_ebitda - test_capex_sched - test_taxes
+    
+    # Pure, unadjusted calculation to match the true Master Engine
     return npf.npv(wacc, test_fcff)
 
-# Bisection algorithms to automatically find the TRUE $0 NPV crossing
+# Python's equivalent to Excel's Goal Seek to find TRUE $0 NPV
 def find_capex_breakeven(test_rev, target_npv=0):
-    low, high = 100.0, 20000.0
-    for _ in range(40):
+    low, high = 100.0, 30000.0
+    for _ in range(50):
         mid = (low + high) / 2
         if get_dynamic_npv(mid, test_rev) > target_npv:
-            low = mid
+            low = mid # NPV is still positive, we need to increase CAPEX
         else:
-            high = mid
+            high = mid # NPV dropped below zero, we overshot
     return mid
 
 def find_rev_breakeven(test_capex, target_npv=0):
     low, high = 100.0, 30000.0
-    for _ in range(40):
+    for _ in range(50):
         mid = (low + high) / 2
         if get_dynamic_npv(test_capex, mid) > target_npv:
-            high = mid
+            high = mid # NPV is positive, we can afford lower revenues
         else:
-            low = mid
+            low = mid # NPV dropped below zero, we need higher revenues
     return mid
 
 # 5. Dashboard Setup & Tabs
@@ -196,58 +198,54 @@ with tab2:
     st.write("") 
     st.write("") 
     
-    # Calculate EXACT Breakeven points
+    # Execute Python "Goal Seek"
     c_break = find_capex_breakeven(live_rev)
     r_break = find_rev_breakeven(live_capex)
     
-    # 1. Generate 5 Dynamic CAPEX Data points crossing precisely through the zero mark
+    # 1. Generate 5 steps matching the Excel layout (Base -> Breakeven)
     c_diff = c_break - live_capex
-    capex_steps = [live_capex + c_diff * (i / 3) for i in range(5)]
+    capex_steps = [live_capex + c_diff * (i / 4) for i in range(5)]
     capex_npvs = [get_dynamic_npv(c, live_rev) for c in capex_steps]
     df_capex = pd.DataFrame({"CAPEX": capex_steps, "NPV": capex_npvs})
     
-    # 2. Generate 5 Dynamic Revenue Data points crossing precisely through the zero mark
+    # 2. Generate 5 steps matching the Excel layout (Base -> Breakeven)
     r_diff = r_break - live_rev
-    rev_steps = [live_rev + r_diff * (i / 3) for i in range(5)]
+    rev_steps = [live_rev + r_diff * (i / 4) for i in range(5)]
     rev_npvs = [get_dynamic_npv(live_capex, r) for r in rev_steps]
     df_rev = pd.DataFrame({"Revenues": rev_steps, "NPV": rev_npvs})
     
     col_sens1, col_sens2 = st.columns(2)
     
     with col_sens1:
-        # Format Data Table
         st.dataframe(df_capex.style.format({"CAPEX": "{:,.0f}", "NPV": "{:,.0f}"}), hide_index=True, use_container_width=True)
         st.write("")
         
-        # Excel-Style Dynamic Chart
         fig_capex = go.Figure()
         fig_capex.add_trace(go.Scatter(x=df_capex["CAPEX"], y=df_capex["NPV"], mode='lines+markers', name='NPV', marker=dict(symbol='diamond', size=10, color='#4472C4'), line=dict(color='#4472C4', width=3)))
         
-        # Widening the X-axis by 15% so the zero crossing is highly visible
+        # Widen the X-axis significantly for a clear view of the zero crossing
         x_min, x_max = min(capex_steps), max(capex_steps)
-        x_pad = (x_max - x_min) * 0.15
+        x_pad = (x_max - x_min) * 0.20
         
         fig_capex.update_layout(title=dict(text="<b>CAPEX Sensitivity</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>CAPEX</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[x_min - x_pad, x_max + x_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
-        fig_capex.add_hline(y=0, line_width=1, line_color="black") # Breakeven Line
+        fig_capex.add_hline(y=0, line_width=1, line_color="black")
         fig_capex.update_xaxes(mirror=True, showline=True, linecolor='gray')
         fig_capex.update_yaxes(mirror=True, showline=True, linecolor='gray')
         st.plotly_chart(fig_capex, use_container_width=True)
     
     with col_sens2:
-        # Format Data Table
         st.dataframe(df_rev.style.format({"Revenues": "{:,.0f}", "NPV": "{:,.0f}"}), hide_index=True, use_container_width=True)
         st.write("") 
         
-        # Excel-Style Dynamic Chart
         fig_rev = go.Figure()
         fig_rev.add_trace(go.Scatter(x=df_rev["Revenues"], y=df_rev["NPV"], mode='lines+markers', name='NPV', marker=dict(symbol='diamond', size=10, color='#4472C4'), line=dict(color='#4472C4', width=3)))
         
-        # Widening the X-axis by 15% so the zero crossing is highly visible
+        # Widen the X-axis significantly for a clear view of the zero crossing
         rx_min, rx_max = min(rev_steps), max(rev_steps)
-        rx_pad = (rx_max - rx_min) * 0.15
+        rx_pad = (rx_max - rx_min) * 0.20
         
         fig_rev.update_layout(title=dict(text="<b>Revenues Sensitivities</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>Revenues</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[rx_min - rx_pad, rx_max + rx_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
-        fig_rev.add_hline(y=0, line_width=1, line_color="black") # Breakeven Line
+        fig_rev.add_hline(y=0, line_width=1, line_color="black")
         fig_rev.update_xaxes(mirror=True, showline=True, linecolor='gray')
         fig_rev.update_yaxes(mirror=True, showline=True, linecolor='gray')
         st.plotly_chart(fig_rev, use_container_width=True)
