@@ -124,7 +124,6 @@ def get_dynamic_npv(test_capex, test_rev):
     # Pure calculation matching the Master Engine
     return npf.npv(wacc, test_fcff)
 
-# Python's equivalent to Excel's Goal Seek to find TRUE $0 NPV
 def find_capex_breakeven(test_rev, target_npv=0):
     low, high = 100.0, 30000.0
     for _ in range(50):
@@ -198,17 +197,14 @@ with tab2:
     st.write("") 
     st.write("") 
     
-    # Execute Python "Goal Seek"
     c_break = find_capex_breakeven(live_rev)
     r_break = find_rev_breakeven(live_capex)
     
-    # 1. Generate 5 steps matching the Excel layout (Base -> Breakeven)
     c_diff = c_break - live_capex
     capex_steps = [live_capex + c_diff * (i / 4) for i in range(5)]
     capex_npvs = [get_dynamic_npv(c, live_rev) for c in capex_steps]
     df_capex = pd.DataFrame({"CAPEX": capex_steps, "NPV": capex_npvs})
     
-    # 2. Generate 5 steps matching the Excel layout (Base -> Breakeven)
     r_diff = r_break - live_rev
     rev_steps = [live_rev + r_diff * (i / 4) for i in range(5)]
     rev_npvs = [get_dynamic_npv(live_capex, r) for r in rev_steps]
@@ -223,11 +219,11 @@ with tab2:
         fig_capex = go.Figure()
         fig_capex.add_trace(go.Scatter(x=df_capex["CAPEX"], y=df_capex["NPV"], mode='lines+markers', name='NPV', marker=dict(symbol='diamond', size=10, color='#4472C4'), line=dict(color='#4472C4', width=3)))
         
-        # Widen the X-axis significantly for a clear view of the zero crossing
         x_min, x_max = min(capex_steps), max(capex_steps)
         x_pad = (x_max - x_min) * 0.20
         
-        fig_capex.update_layout(title=dict(text="<b>CAPEX Sensitivity</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>CAPEX</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[x_min - x_pad, x_max + x_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
+        # FIX: xanchor='center' added to perfectly center the title
+        fig_capex.update_layout(title=dict(text="<b>CAPEX Sensitivity</b>", font=dict(size=24, color="black"), x=0.5, xanchor='center'), xaxis_title=dict(text="<b>CAPEX</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[x_min - x_pad, x_max + x_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
         fig_capex.add_hline(y=0, line_width=1, line_color="black")
         fig_capex.update_xaxes(mirror=True, showline=True, linecolor='gray')
         fig_capex.update_yaxes(mirror=True, showline=True, linecolor='gray')
@@ -240,11 +236,11 @@ with tab2:
         fig_rev = go.Figure()
         fig_rev.add_trace(go.Scatter(x=df_rev["Revenues"], y=df_rev["NPV"], mode='lines+markers', name='NPV', marker=dict(symbol='diamond', size=10, color='#4472C4'), line=dict(color='#4472C4', width=3)))
         
-        # Widen the X-axis significantly for a clear view of the zero crossing
         rx_min, rx_max = min(rev_steps), max(rev_steps)
         rx_pad = (rx_max - rx_min) * 0.20
         
-        fig_rev.update_layout(title=dict(text="<b>Revenues Sensitivities</b>", font=dict(size=24, color="black"), x=0.5), xaxis_title=dict(text="<b>Revenues</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[rx_min - rx_pad, rx_max + rx_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
+        # FIX: Changed title text to singular and added xanchor='center'
+        fig_rev.update_layout(title=dict(text="<b>Revenues Sensitivity</b>", font=dict(size=24, color="black"), x=0.5, xanchor='center'), xaxis_title=dict(text="<b>Revenues</b>", font=dict(color="black", size=14)), yaxis_title=dict(text="<b>NPV</b>", font=dict(color="black", size=14)), plot_bgcolor='white', margin=dict(l=40, r=40, t=60, b=40), xaxis=dict(range=[rx_min - rx_pad, rx_max + rx_pad], showgrid=False, linecolor='gray', ticks='outside'), yaxis=dict(showgrid=True, gridcolor='lightgray', linecolor='gray', ticks='outside'))
         fig_rev.add_hline(y=0, line_width=1, line_color="black")
         fig_rev.update_xaxes(mirror=True, showline=True, linecolor='gray')
         fig_rev.update_yaxes(mirror=True, showline=True, linecolor='gray')
